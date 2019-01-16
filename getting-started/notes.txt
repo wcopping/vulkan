@@ -1,0 +1,126 @@
+
+
+--------------------------------------------------------------------------------
+  SETUP
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+    validation layers
+--------------------------------------------------------------------------------
+    Vulkan is structured such that much of the settings for the GPU are set
+    through structs and not function parameters
+    
+    general object creation pattern in Vulkan
+      pointer to struct with creation info
+      pointer to custom allocator callbacks, always nullptr in this tutorial
+      pointer to variable that stores handle to the new object
+    
+    validation layers
+      Vulkan aims at minimal driver overhead therefore there is very limited
+      error checking by the API by default
+      The API is finicky and can be broken easily without warning
+      The API adds validation layers to check that all is well
+      Common operations in validation layers include:
+        check values of parameters against specification to detect misuse
+        track creation and destruction of objects to find resource leaks
+        check thread safety by tracking the threads that calls originate from
+        log every call and its parameters to the standard output
+        trace vulkan calls for profiling and replaying
+      Can ENABLE for debug builds and DISABLE for release builds
+      LunarG SDK provides them open-source
+    
+    message callback
+      Useful to allow validation layers to talk with us about what is going
+      wrong
+      
+    get required extensions
+      returns required list of extensions based on whether validation whether
+      validation layers enabled or not
+    
+    debug callback
+      setup so that you can control messaging based on severity of message
+      look at the function, it allows you to use a conditional to output if
+      severity is high enough using:
+        if (message_severity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) 
+          // message is important enough to show
+      p_callback_data is a VkDebugUtilsMessengerCallbackDataEXT struct with
+      the important data members pMessage, pObjects, objectCount
+      Look to the vulkan-tutorial Validation Layers page under Setup for details
+    
+    load in the debug messenger extension
+      this function is an extension function and so is not loaded in
+      automatically (via GLFW?) and so you must load it in yourself with:
+      vkGetInstanceProcAddr
+      and a proxy function:
+      VkResult create_debug_utils_messenger_EXT
+    
+    cleanup the debug messenger extension
+      this function must be similarly treated as the above
+      it is not automatically loaded and so you must load it yourself
+--------------------------------------------------------------------------------
+
+
+--------------------------------------------------------------------------------
+  physical devices and queue families
+--------------------------------------------------------------------------------
+    devices
+    -------
+    The graphics card we'll use is stored in a VkPhysicalDevice handle
+    this object is destroyed when we destroy the VkInstance
+    
+    Devices are loaded into a vector and each is checked to see if it is
+    suitable for use by Vulkan
+    The first suitable GPU is selected as this instance's device
+    
+    We can evaluate suitability of a device by looking at it's device properties
+    through vkGetPhysicalDeviceFeatures
+    We can also give each device a score and use the device with the highest
+    score
+    
+    queue families
+    --------------
+    Almost anything that happens in Vulkan will requires commands to be
+    submitted to a queue
+    Different queues come from different queue families
+    Each queue family only allows a given subset of commands
+    E.g. there may be a queue family that only allows compute related commands
+    
+    We need to check that we have access to the right queue families
+    For now we just concern ourselves with graphics commands
+    You need to find and use a queue family that suits your needs
+    You can get the information you need through vkGetPhysicalDeviceQueueFamilyProperties
+    We are looking for VK_QUEUE_GRAPHICS_BIT support
+--------------------------------------------------------------------------------
+
+--------------------------------------------------------------------------------
+  logical device and queues
+--------------------------------------------------------------------------------
+    logical device
+    --------------
+    It seems like you can have multiple physical devices supported but they are
+    managed through a single logical device...?
+    You can also create multiple logical devices for a single physical device
+    if your needs vary.
+    
+    When you create a logical device you must specify the extensions and
+    validation layers
+      These are DEVICE SPECIFIC
+      An example of a DEVICE SPECIFIC extension is VK_KHR_swapchain
+      Some devices might not support some extensions or features
+    
+    We must cleanup with vkDestroyDevice
+    
+    queues
+    ------
+    Get queue information through VkDeviceQueueCreateInfo
+    
+    You can influence the scheduling of command buffer execution through
+    assigning floating point numbers (0.0 through 1.0) to different queues
+      You must do this even if there is only 1 queue (just set to 1.0f)
+--------------------------------------------------------------------------------
+
+--------------------------------------------------------------------------------
+  PRESENTATION
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+    window surface
+--------------------------------------------------------------------------------
