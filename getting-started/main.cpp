@@ -7,81 +7,6 @@
  */
 
 /*
- * window surface
- * --------------
- * Vulkan is platform agnostic and therefore does not know what window it will
- * be interfacing with.
- *   We need to use the WSI (window system integration) extensions
- *   We need to use VK_KHR_SURFACE which exposes a VkSurfaceKHR object
- *     represents abstract type of surface to present rendered images to
- *   It is automatically got by glfwGetRequiredInstanceExtensions along with a
- *   few other necessary extensions in the list provided by that function
- *
- * Vulkan does not REQUIRE a window surface (unlike OpenGL which requires at
- * least an invisible one), meaning you can run a graphics program just for the
- * compute ability or off screen rendering from the graphics API .
- *
- * You must ensure that both your Vulkan implementation and your DEVICE support
- * graphics presentation
- *   Therefore you must check that graphics presentation is supported by some
- *   queue family you are using
- *   Drawing and presenting are not bound to same queue families and you must
- *   ensure that both are supported to move forward
- *   Or you could explicitly select a device that has both in the same family
- *
- * presentation queue
- * ------------------
- * We must modify logical device creation to create presentation queue
- *
- * swapchain
- * ---------
- * Vulkan has no default framebuffer
- * We instead have a swap chain which owns the buffers we render to before we
- * visualize them on the screen
- *   This must be explicitly created
- *   Essentially is a queue of images waiting to be presented to the screen
- *   General purpose is synchronize image presentation with screen refresh rate
- *   We can control how the queue works and conditions through set up of the
- *   swapchain
- * We must check for swapchain support
- *
- * Setting up the swapchain is more involved than the physical or logical device
- *
- * core components of swapchain are the PHYSICAL DEVICE and the WINDOW SURFACE
- *
- * must determine three settings:
- *   surface format (color depth)
- *   presentation mode (conditions for "swapping" images to the screen)
- *   swap extent (resolution of images in swapchain)
- *     almost always equal to resolution of windowe we're drawing to
- *     range is defined in VkSurfaceCapabilitiesKHR structure
- *
- * each VkSurfaceFormatKHR contains a format and a colorSpace member
- *   format indicates color channels and types
- *   colorSpace indicates if SRGB color space is supported
- *
- * Arguably most important setting for swapchain is "PRESENTATION MODE"
- *   It represents actual conditions for showing images to the screen
- *
- * Now that we have made all the necessary helper functions:
- *   choose_swap_surface_format
- *   choose_swap_present_mode
- *   choose_swap_extent
- * We can put them together in create_swapchain
- *
- * NOTE ON POST PROCESSING!!
- * in create_swapchain function
- *   VkSwapChainCreateInfo data type has bit field "imageUsage"
- *   This field specifies what kind of operations we'll use the images in the
- *   swap chain for. E.g. POST PROCESSING! we would use
- *   VK_IMAGE_USAGE_TRANSFER_DST_BIT to transfer the image to another image
- *   then use a memory operation to transfer the rendered image to the swapchain
- *   image
- *
- * NOTE:
- * function check_device_extension_support is a beautiful piece of code in my
- * opinion
- *   It uses vector member functions I don't usually see (erase and empty)
  */
 
 
@@ -205,6 +130,10 @@ private:
   VkQueue graphics_queue;
   VkQueue present_queue;
   VkSwapchainKHR swapchain;
+  std::vector<VkImage> swapchain_images;
+  VkFormat swapchain_image_format;
+  VkExtent2D swapchain_extent;
+  std::vector<VkImageView> swapchain_image_views;
 
 
   std::vector<const char*> get_required_extensions() {
@@ -373,11 +302,39 @@ private:
   void init_vulkan()
   {
     create_instance();
+    lkjadf;
+    
     setup_debug_messenger();
     create_surface();
     pick_physical_device();
     create_logical_device();
     create_swapchain();
+    create_image_views();
+  }
+
+
+  void create_image_views()
+  {
+    swapchain_image_views.resize(swapchain_images.size());
+    for (size_t i = 0; i < swapchain_images.size(); i++) {
+      VkImageViewCreateInfo ci = {};
+      ci.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+      ci.image = swapchain_images[i];
+      ci.viewType = VK_IMAGE_VIEW_TYPE_2D;
+      ci.format = swapchain_image_format;
+      ci.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+      ci.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+      ci.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+      ci.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+      ci.subresourceRange.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT;
+      ci.subresourceRange.baseMipLevel   = 0;
+      ci.subresourceRange.levelCount     = 1;
+      ci.subresourceRange.baseArrayLayer = 0;
+      ci.subresourceRange.layerCount     = 1;
+      if (vkCreateImageView(device, &ci, nullptr, &swapchain_image_views[i]) != VK_SUCCESS)
+        throw std::runtime_error("Failed to create image views!");
+    }
+
   }
 
 
@@ -424,6 +381,13 @@ private:
 
     if (vkCreateSwapchainKHR(device, &ci, nullptr, &swapchain) != VK_SUCCESS)
       throw std::runtime_error("Failed to create swapchain!");
+
+    vkGetSwapchainImagesKHR(device, swapchain, &image_count, nullptr);
+    swapchain_images.resize(image_count);
+    vkGetSwapchainImagesKHR(device, swapchain, &image_count, swapchain_images.data());
+
+    swapchain_image_format = surface_format.format;
+    swapchain_extent = extent;
   }
 
 
@@ -591,6 +555,9 @@ private:
 
   void cleanup()
   {
+    for (auto image_view : swapchain_image_views) {
+      vkDestroyImageView(device, image_view, nullptr);
+    }
     vkDestroySwapchainKHR(device, swapchain, nullptr);
     vkDestroyDevice(device, nullptr);
     if (enable_validation_layers)

@@ -8,12 +8,12 @@
 --------------------------------------------------------------------------------
     Vulkan is structured such that much of the settings for the GPU are set
     through structs and not function parameters
-    
+
     general object creation pattern in Vulkan
       pointer to struct with creation info
       pointer to custom allocator callbacks, always nullptr in this tutorial
       pointer to variable that stores handle to the new object
-    
+
     validation layers
       Vulkan aims at minimal driver overhead therefore there is very limited
       error checking by the API by default
@@ -27,32 +27,32 @@
         trace vulkan calls for profiling and replaying
       Can ENABLE for debug builds and DISABLE for release builds
       LunarG SDK provides them open-source
-    
+
     message callback
       Useful to allow validation layers to talk with us about what is going
       wrong
-      
+
     get required extensions
       returns required list of extensions based on whether validation whether
       validation layers enabled or not
-    
+
     debug callback
       setup so that you can control messaging based on severity of message
       look at the function, it allows you to use a conditional to output if
       severity is high enough using:
-        if (message_severity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) 
+        if (message_severity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT)
           // message is important enough to show
       p_callback_data is a VkDebugUtilsMessengerCallbackDataEXT struct with
       the important data members pMessage, pObjects, objectCount
       Look to the vulkan-tutorial Validation Layers page under Setup for details
-    
+
     load in the debug messenger extension
       this function is an extension function and so is not loaded in
       automatically (via GLFW?) and so you must load it in yourself with:
       vkGetInstanceProcAddr
       and a proxy function:
       VkResult create_debug_utils_messenger_EXT
-    
+
     cleanup the debug messenger extension
       this function must be similarly treated as the above
       it is not automatically loaded and so you must load it yourself
@@ -66,16 +66,16 @@
     -------
     The graphics card we'll use is stored in a VkPhysicalDevice handle
     this object is destroyed when we destroy the VkInstance
-    
+
     Devices are loaded into a vector and each is checked to see if it is
     suitable for use by Vulkan
     The first suitable GPU is selected as this instance's device
-    
+
     We can evaluate suitability of a device by looking at it's device properties
     through vkGetPhysicalDeviceFeatures
     We can also give each device a score and use the device with the highest
     score
-    
+
     queue families
     --------------
     Almost anything that happens in Vulkan will requires commands to be
@@ -83,7 +83,7 @@
     Different queues come from different queue families
     Each queue family only allows a given subset of commands
     E.g. there may be a queue family that only allows compute related commands
-    
+
     We need to check that we have access to the right queue families
     For now we just concern ourselves with graphics commands
     You need to find and use a queue family that suits your needs
@@ -100,19 +100,19 @@
     managed through a single logical device...?
     You can also create multiple logical devices for a single physical device
     if your needs vary.
-    
+
     When you create a logical device you must specify the extensions and
     validation layers
       These are DEVICE SPECIFIC
       An example of a DEVICE SPECIFIC extension is VK_KHR_swapchain
       Some devices might not support some extensions or features
-    
+
     We must cleanup with vkDestroyDevice
-    
+
     queues
     ------
     Get queue information through VkDeviceQueueCreateInfo
-    
+
     You can influence the scheduling of command buffer execution through
     assigning floating point numbers (0.0 through 1.0) to different queues
       You must do this even if there is only 1 queue (just set to 1.0f)
@@ -124,3 +124,83 @@
 --------------------------------------------------------------------------------
     window surface
 --------------------------------------------------------------------------------
+    Vulkan is platform agnostic and therefore does not know what window it will
+    be interfacing with.
+      We need to use the WSI (window system integration) extensions
+      We need to use VK_KHR_SURFACE which exposes a VkSurfaceKHR object
+        represents abstract type of surface to present rendered images to
+      It is automatically got by glfwGetRequiredInstanceExtensions along with a
+      few other necessary extensions in the list provided by that function
+
+    Vulkan does not REQUIRE a window surface (unlike OpenGL which requires at
+    least an invisible one), meaning you can run a graphics program just for the
+    compute ability or off screen rendering from the graphics API .
+
+    You must ensure that both your Vulkan implementation and your DEVICE support
+    graphics presentation
+      Therefore you must check that graphics presentation is supported by some
+      queue family you are using
+      Drawing and presenting are not bound to same queue families and you must
+      ensure that both are supported to move forward
+      Or you could explicitly select a device that has both in the same family
+
+    presentation queue
+    ------------------
+    We must modify logical device creation to create presentation queue
+
+--------------------------------------------------------------------------------
+    swapchain
+--------------------------------------------------------------------------------
+    Vulkan has no default framebuffer
+    We instead have a swap chain which owns the buffers we render to before we
+    visualize them on the screen
+      This must be explicitly created
+      Essentially is a queue of images waiting to be presented to the screen
+      General purpose is synchronize image presentation with screen refresh rate
+      We can control how the queue works and conditions through set up of the
+      swapchain
+    We must check for swapchain support
+
+    Setting up the swapchain is more involved than the physical or logical device
+
+    core components of swapchain are the PHYSICAL DEVICE and the WINDOW SURFACE
+
+    must determine three settings:
+      surface format (color depth)
+      presentation mode (conditions for "swapping" images to the screen)
+      swap extent (resolution of images in swapchain)
+        almost always equal to resolution of windowe we're drawing to
+        range is defined in VkSurfaceCapabilitiesKHR structure
+
+    each VkSurfaceFormatKHR contains a format and a colorSpace member
+      format indicates color channels and types
+      colorSpace indicates if SRGB color space is supported
+
+    Arguably most important setting for swapchain is "PRESENTATION MODE"
+      It represents actual conditions for showing images to the screen
+
+    Now that we have made all the necessary helper functions:
+      choose_swap_surface_format
+      choose_swap_present_mode
+      choose_swap_extent
+    We can put them together in create_swapchain
+
+    NOTE ON POST PROCESSING!!
+    in create_swapchain function
+      VkSwapChainCreateInfo data type has bit field "imageUsage"
+      This field specifies what kind of operations we'll use the images in the
+      swap chain for. E.g. POST PROCESSING! we would use
+      VK_IMAGE_USAGE_TRANSFER_DST_BIT to transfer the image to another image
+      then use a memory operation to transfer the rendered image to the swapchain
+      image
+
+    NOTE:
+    function check_device_extension_support is a beautiful piece of code in my
+    opinion
+      It uses vector member functions I don't usually see (erase and empty)
+--------------------------------------------------------------------------------
+    image views
+--------------------------------------------------------------------------------
+    an image view describes how to access the image and which part of the image
+    to access.
+    E.g. if it should be treated as a 2D texture depth texture w/o mipmapping
