@@ -309,3 +309,23 @@
       We must explicitly say that the subpass we are using is a graphics subpass
       via the VkSubpassDescription object
       This is because VULKAN MAY SUPPORT COMPUTE SUBPASSES IN THE FUTURE.
+    ----------------
+    Concluding Notes
+    ----------------
+    recap:
+      Shader Stages - shader modules define functionality of programmable parts
+      of graphics pipeline
+      Fixed-Function - a ton of structures we have to explicitly fill in to
+      ensure the graphics pipeline is appropriately configured for our use-case
+      Pipeline Layout - uniform and push values referenced by the shaders that
+      can be updated AT DRAW  TIME
+      Render Pass - attachments referenced by pipeline stages and their usage
+
+    all of these combine into the VkGraphicsPipelineCreateInfo object
+
+    the vkCreateGraphicsPipeline function is designed to take multiple
+    VkGraphicsPipelineCreateInfo objects and create multiple VkPipeline objects
+    in a single call
+    You can also pass a pipeline cache object which is good for storing info
+    about relevant pipeline creation across multiple calls to
+    vkCreateGraphicsPipelines

@@ -148,6 +148,7 @@ private:
   std::vector<VkImageView> swapchain_image_views;
   VkRenderPass render_pass;
   VkPipelineLayout pipeline_layout;
+  VkPipeline graphics_pipeline;
 
 
   std::vector<const char*> get_required_extensions() {
@@ -383,12 +384,12 @@ private:
 
     VkPipelineShaderStageCreateInfo shader_stages[] = {vert_shader_stage_ci, frag_shader_stage_ci};
 
-    VkPipelineVertexInputStateCreateInfo vert_input_ci = {};
-    vert_input_ci.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-    vert_input_ci.vertexBindingDescriptionCount   = 0;
-    vert_input_ci.pVertexBindingDescriptions      = nullptr;
-    vert_input_ci.vertexAttributeDescriptionCount = 0;
-    vert_input_ci.pVertexAttributeDescriptions    = nullptr;
+    VkPipelineVertexInputStateCreateInfo vertex_input_ci = {};
+    vertex_input_ci.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+    vertex_input_ci.vertexBindingDescriptionCount   = 0;
+    vertex_input_ci.pVertexBindingDescriptions      = nullptr;
+    vertex_input_ci.vertexAttributeDescriptionCount = 0;
+    vertex_input_ci.pVertexAttributeDescriptions    = nullptr;
 
     VkPipelineInputAssemblyStateCreateInfo input_assembly = {};
     input_assembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
@@ -477,6 +478,28 @@ private:
 
     if (vkCreatePipelineLayout(device, &pipeline_layout_ci, nullptr, &pipeline_layout) != VK_SUCCESS)
       throw std::runtime_error("Failed to create pipeline layout!");
+
+    VkGraphicsPipelineCreateInfo pipeline_ci = {};
+    pipeline_ci.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+    pipeline_ci.stageCount = 2;
+    pipeline_ci.pStages = shader_stages;
+    pipeline_ci.pVertexInputState   = &vertex_input_ci;
+    pipeline_ci.pInputAssemblyState = &input_assembly;
+    pipeline_ci.pViewportState = &viewport_state;
+    pipeline_ci.pRasterizationState = &rasterizer;
+    pipeline_ci.pMultisampleState = &multisampling;
+    pipeline_ci.pDepthStencilState = nullptr;
+    pipeline_ci.pColorBlendState = &color_blending;
+    pipeline_ci.pDynamicState = nullptr;
+    pipeline_ci.layout = pipeline_layout;
+    pipeline_ci.renderPass = render_pass;
+    pipeline_ci.subpass = 0;
+    pipeline_ci.basePipelineHandle = VK_NULL_HANDLE;
+    pipeline_ci.basePipelineIndex = -1;
+
+    if (vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipeline_ci, nullptr, &graphics_pipeline) != VK_SUCCESS)
+      throw std::runtime_error("Failed to create graphics pipeline!");
+
 
     vkDestroyShaderModule(device, frag_shader_module, nullptr);
     vkDestroyShaderModule(device, vert_shader_module, nullptr);
@@ -739,6 +762,7 @@ private:
 
   void cleanup()
   {
+    vkDestroyPipeline(device, graphics_pipeline, nullptr);
     vkDestroyPipelineLayout(device, pipeline_layout, nullptr);
     vkDestroyRenderPass(device, render_pass, nullptr);
     for (auto image_view : swapchain_image_views) {
