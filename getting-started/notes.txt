@@ -329,3 +329,32 @@
     You can also pass a pipeline cache object which is good for storing info
     about relevant pipeline creation across multiple calls to
     vkCreateGraphicsPipelines
+    ---------------
+    Command Buffers
+    ---------------
+    Command Pools
+    You must first record any operation you want to run in command buffers.
+    Including drawing operations and memory transfers!
+    You do this in advance then apply it to one or more threads.
+    Then you execute these commands in the main loop.
+
+    First you must create a COMMAND POOL which manages the memory used to store
+    the buffers and command buffers are allocated from them
+
+    We then submit the command buffer to a device queue
+    Each COMMAND POOL can only allocate COMMAND BUFFERS submitted on a
+    SINGLE TYPE OF QUEUE
+    We want to draw, therefore we will record commands for drawing, therefore
+    we chose the GRAPHICS QUEUE FAMILY
+
+    Command Buffers
+    Allocate command buffers and record drawing commands in them
+    After it is set up you should begin RECORDING it
+    For each framebuffer you should instantiate a new VkCommandBufferBeginInfo
+    object and fill in the structure
+    Begin the render pass wtih vkCmdBeginRenderPass
+
+    All the functions that record commands are recognized by their
+    vkCmd prefix
+    They all return void so error handling happens after recording is finished
+    The first parameter for EVERY COMMAND is always command buffer to record to
