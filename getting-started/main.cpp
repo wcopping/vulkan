@@ -6,8 +6,12 @@
  * Wyatt Coppinger
  */
 
-/*
- */
+
+#ifdef NDEBUG
+  const bool enable_validation_layers = false;
+#else
+  const bool enable_validation_layers = true;
+#endif
 
 
 #define GLFW_INCLUDE_VULKAN
@@ -23,49 +27,16 @@
 #include <vector>
 #include <cstring>
 #include <set>
+#include <fstream>
 
 
 const int WIDTH = 800;
 const int HEIGHT = 800;
-
 const std::vector<const char*> validation_layers = {
   "VK_LAYER_LUNARG_standard_validation"
 };
-
 const std::vector<const char*> device_extensions = {
   VK_KHR_SWAPCHAIN_EXTENSION_NAME
-};
-
-#ifdef NDEBUG
-  const bool enable_validation_layers = false;
-#else
-  const bool enable_validation_layers = true;
-#endif
-
-
-static void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods);
-VkResult create_debug_utils_messenger_EXT(
-    VkInstance,
-    const VkDebugUtilsMessengerCreateInfoEXT*,
-    const VkAllocationCallbacks*,
-    VkDebugUtilsMessengerEXT*);
-
-
-struct QueueFamilyIndices
-{
-  uint32_t graphics_family = -1;
-  uint32_t present_family  = -1;
-
-  bool is_complete() {
-    return graphics_family >= 0 && present_family >= 0;
-  }
-};
-
-struct SwapchainSupportDetails
-{
-  VkSurfaceCapabilitiesKHR capabilities;
-  std::vector<VkSurfaceFormatKHR> formats;
-  std::vector<VkPresentModeKHR> presentModes;
 };
 
 
@@ -103,6 +74,47 @@ void destroy_debug_utils_messenger_EXT(VkInstance instance,
   if (func != nullptr)
     func(instance, debug_messenger, p_allocator);
 }
+
+
+static std::vector<char> read_file(const std::string& filename)
+{
+  std::ifstream file(filename, std::ios::ate | std::ios::binary);
+
+  if (!file.is_open())
+    throw std::runtime_error("Failed to open file!");
+
+  size_t file_size = (size_t) file.tellg();
+  std::vector<char> buffer(file_size);
+  file.seekg(0);
+  file.read(buffer.data(), file_size);
+  file.close();
+
+  return buffer;
+}
+
+
+//------------------------------------------------------------------------------
+
+
+//------------------------------------------------------------------------------
+// STRUCTS
+//------------------------------------------------------------------------------
+struct QueueFamilyIndices
+{
+  uint32_t graphics_family = -1;
+  uint32_t present_family  = -1;
+
+  bool is_complete() {
+    return graphics_family >= 0 && present_family >= 0;
+  }
+};
+
+struct SwapchainSupportDetails
+{
+  VkSurfaceCapabilitiesKHR capabilities;
+  std::vector<VkSurfaceFormatKHR> formats;
+  std::vector<VkPresentModeKHR> presentModes;
+};
 //------------------------------------------------------------------------------
 
 
@@ -134,6 +146,7 @@ private:
   VkFormat swapchain_image_format;
   VkExtent2D swapchain_extent;
   std::vector<VkImageView> swapchain_image_views;
+  VkPipelineLayout pipeline_layout;
 
 
   std::vector<const char*> get_required_extensions() {
@@ -288,9 +301,6 @@ private:
   void init_window()
   {
     glfwInit();
-    /* GLFW originally inteded for OpenGL
-     * we must hint to it that we are not using OpenGL
-     */
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
     glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
     window = glfwCreateWindow(WIDTH, HEIGHT, "Vulkan", nullptr, nullptr);
@@ -302,14 +312,149 @@ private:
   void init_vulkan()
   {
     create_instance();
-    lkjadf;
-    
     setup_debug_messenger();
     create_surface();
     pick_physical_device();
     create_logical_device();
     create_swapchain();
     create_image_views();
+    create_graphics_pipeline();
+  }
+
+
+  void create_graphics_pipeline()
+  {
+    auto vert_shader_code = read_file("shaders/vert.spv");
+    auto frag_shader_code = read_file("shaders/frag.spv");
+
+    VkShaderModule vert_shader_module = create_shader_module(vert_shader_code);
+    VkShaderModule frag_shader_module = create_shader_module(frag_shader_code);
+
+    VkPipelineShaderStageCreateInfo vert_shader_stage_ci = {};
+    vert_shader_stage_ci.sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    vert_shader_stage_ci.stage  = VK_SHADER_STAGE_VERTEX_BIT;
+    vert_shader_stage_ci.module = vert_shader_module;
+    vert_shader_stage_ci.pName  = "main";
+
+    VkPipelineShaderStageCreateInfo frag_shader_stage_ci = {};
+    frag_shader_stage_ci.sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    frag_shader_stage_ci.stage  = VK_SHADER_STAGE_FRAGMENT_BIT;
+    frag_shader_stage_ci.module = frag_shader_module;
+    frag_shader_stage_ci.pName  = "main";
+
+    VkPipelineShaderStageCreateInfo shader_stages[] = {vert_shader_stage_ci, frag_shader_stage_ci};
+
+    VkPipelineVertexInputStateCreateInfo vert_input_ci = {};
+    vert_input_ci.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+    vert_input_ci.vertexBindingDescriptionCount   = 0;
+    vert_input_ci.pVertexBindingDescriptions      = nullptr;
+    vert_input_ci.vertexAttributeDescriptionCount = 0;
+    vert_input_ci.pVertexAttributeDescriptions    = nullptr;
+
+    VkPipelineInputAssemblyStateCreateInfo input_assembly = {};
+    input_assembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+    input_assembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+    input_assembly.primitiveRestartEnable = VK_FALSE;
+
+    VkViewport viewport = {};
+    viewport.x = 0.0f;
+    viewport.y = 0.0f;
+    viewport.width  = (float) swapchain_extent.width;
+    viewport.height = (float) swapchain_extent.height;
+    viewport.minDepth = 0.0f;
+    viewport.maxDepth = 1.0f;
+
+    VkRect2D scissor = {};
+    scissor.offset = {0, 0};
+    scissor.extent = swapchain_extent;
+
+    VkPipelineViewportStateCreateInfo viewport_state = {};
+    viewport_state.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+    viewport_state.viewportCount = 1;
+    viewport_state.pViewports    = &viewport;
+    viewport_state.scissorCount  = 1;
+    viewport_state.pScissors     = &scissor;
+
+    VkPipelineRasterizationStateCreateInfo rasterizer = {};
+    rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+    rasterizer.depthClampEnable = VK_FALSE;
+    rasterizer.rasterizerDiscardEnable = VK_FALSE;
+    rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
+    rasterizer.lineWidth   = 1.0f;
+    rasterizer.cullMode    = VK_CULL_MODE_BACK_BIT;
+    rasterizer.frontFace   = VK_FRONT_FACE_CLOCKWISE;
+    rasterizer.depthBiasEnable = VK_FALSE;
+    rasterizer.depthBiasConstantFactor = 0.0f;
+    rasterizer.depthBiasClamp          = 0.0f;
+    rasterizer.depthBiasSlopeFactor    = 0.0f;
+
+    VkPipelineMultisampleStateCreateInfo multisampling = {};
+    multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+    multisampling.sampleShadingEnable  = VK_FALSE;
+    multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+    multisampling.minSampleShading     = 1.0f;
+    multisampling.pSampleMask = nullptr;
+    multisampling.alphaToCoverageEnable = VK_FALSE;
+    multisampling.alphaToOneEnable      = VK_FALSE;
+
+    VkPipelineColorBlendAttachmentState color_blend_attachment = {};
+    color_blend_attachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT |
+    VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+    color_blend_attachment.blendEnable = VK_FALSE;
+    color_blend_attachment.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
+    color_blend_attachment.dstColorBlendFactor = VK_BLEND_FACTOR_ZERO;
+    color_blend_attachment.colorBlendOp = VK_BLEND_OP_ADD;
+    color_blend_attachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+    color_blend_attachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+    color_blend_attachment.alphaBlendOp = VK_BLEND_OP_ADD;
+
+    VkPipelineColorBlendStateCreateInfo color_blending = {};
+    color_blending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+    color_blending.logicOpEnable = VK_FALSE;
+    color_blending.logicOp = VK_LOGIC_OP_COPY;
+    color_blending.attachmentCount = 1;
+    color_blending.pAttachments = &color_blend_attachment;
+    color_blending.blendConstants[0] = 0.0f;
+    color_blending.blendConstants[1] = 0.0f;
+    color_blending.blendConstants[2] = 0.0f;
+    color_blending.blendConstants[3] = 0.0f;
+
+    VkDynamicState dynamic_states[] = {
+      VK_DYNAMIC_STATE_VIEWPORT,
+      VK_DYNAMIC_STATE_LINE_WIDTH
+    };
+
+    VkPipelineDynamicStateCreateInfo dynamic_state = {};
+    dynamic_state.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+    dynamic_state.dynamicStateCount = 2;
+    dynamic_state.pDynamicStates = dynamic_states;
+
+    VkPipelineLayoutCreateInfo pipeline_layout_ci = {};
+    pipeline_layout_ci.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    pipeline_layout_ci.setLayoutCount = 0;
+    pipeline_layout_ci.pSetLayouts = nullptr;
+    pipeline_layout_ci.pushConstantRangeCount = 0;
+    pipeline_layout_ci.pPushConstantRanges = nullptr;
+
+    if (vkCreatePipelineLayout(device, &pipeline_layout_ci, nullptr, &pipeline_layout) != VK_SUCCESS)
+      throw std::runtime_error("Failed to create pipeline layout!");
+
+    vkDestroyShaderModule(device, frag_shader_module, nullptr);
+    vkDestroyShaderModule(device, vert_shader_module, nullptr);
+  }
+
+
+  VkShaderModule create_shader_module(const std::vector<char>& code)
+  {
+    VkShaderModuleCreateInfo ci = {};
+    ci.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+    ci.codeSize = code.size();
+    ci.pCode = reinterpret_cast<const uint32_t*>(code.data());
+    VkShaderModule shader_module;
+    if (vkCreateShaderModule(device, &ci, nullptr, &shader_module) != VK_SUCCESS)
+      throw std::runtime_error("Failed to create a shader module!");
+
+    return shader_module;
   }
 
 
@@ -555,6 +700,7 @@ private:
 
   void cleanup()
   {
+    vkDestroyPipelineLayout(device, pipeline_layout, nullptr);
     for (auto image_view : swapchain_image_views) {
       vkDestroyImageView(device, image_view, nullptr);
     }
@@ -607,6 +753,8 @@ private:
   }
 };
 //------------------------------------------------------------------------------
+
+
 
 
 //------------------------------------------------------------------------------

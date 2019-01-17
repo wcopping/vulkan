@@ -204,3 +204,83 @@
     an image view describes how to access the image and which part of the image
     to access.
     E.g. if it should be treated as a 2D texture depth texture w/o mipmapping
+--------------------------------------------------------------------------------
+
+--------------------------------------------------------------------------------
+  GRAPHICS AND PIPELINE BASICS
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+    image views
+--------------------------------------------------------------------------------
+    Vulkan and OpenCL use SPIR-V as it's shader code language.
+    SPIR-V is a bytecode format language.
+    It can be used to write both compute and graphics shaders.
+    It is a bytecode language to help restrict GPU vendors from creating
+    compilers that stray from the path and may make code that works in compiler
+    inoperable in another.
+    Khronos has released their own vendor independent compiler which compilers
+    GLSL to SPIR-V binary which you can ship with your program
+    SPIR-V is included in the LunarG SDK as glslangValidator.exe
+
+    GLSL is a C-style language.
+    Programs written in it have a main function which runs for every object.
+    It uses global variables, rather than parameters, for input and output.
+    Includes built in vector and matrix primitives!
+
+    vertex shader
+    -------------
+    You must tell Vulkan in what stage your vertex shader will be used through
+    the VkPipelineShaderStageCreateInfo's stage member variable
+    Interesting NOTE:
+      Look at the pName member variable, it is the name of the function to
+      invoke, known as the ENTRYPOINT.
+      This means we can combine multiple fragment shaders into a single shader
+      module and use different ENTRYPOINTS to differentiate between their
+      behaviors!
+      
+    ---------------
+    Fixed functions
+    ---------------
+    VkPipelineInputAssemblyStateCreateInfo describes:
+      what kind of geometry will be drawn from vertices
+      if primitive restart should be enabled
+    geometry is defined by the topology member variable and can be a number
+    of predefined enumeration values
+    primitive restart controlled through primitiveRestartEnable
+
+    viewport
+    region of framebuffer that output is rendered to
+    almost always (0, 0) to (swapchain_extent.width, swapchain_extent.height)
+
+    rasterizer
+    turns geometry from vertex shader and turns into fragments to be colored
+    many knobs to turn here which allow you to control the way you color the
+    geometry, how you cull the geometry, etc. etc.
+
+    multisampling
+    way to perform anti-aliasing
+    combine multiple polygons that rasterize to the same pixel
+    effective at edge points
+
+    color blending
+    the color that is returned by the fragment shader must be combined with the
+    color that is already in the framebuffer
+    you can:
+      mix old and new value to produce final color
+      combine old and new with bitwise operation (INTERESTING!)
+
+    Dynamic State
+    some of the state specified in the previous structures we made
+    CAN BE CHANGED WITHOUT RECREATING THE PIPELINE.
+    E.g. viewport size, line width, blend constants
+    To be able to do this you need to create a VkPipeLineDynamicStateCreateInfo
+    structure
+
+    Pipeline Layout
+    you can use UNIFORM values in shaders which are globals that can be changed
+    at drawing time to alter the behavior of your shaders without having to
+    recreate them
+    E.g. pass transformation matrix to vertex shader, create texture samplers
+    in the fragment shader
+    We specify these uniforms in the graphics pipeline through VkPipelineLayout
+    objects
