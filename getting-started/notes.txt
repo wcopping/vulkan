@@ -358,3 +358,46 @@
     vkCmd prefix
     They all return void so error handling happens after recording is finished
     The first parameter for EVERY COMMAND is always command buffer to record to
+
+    draw_frame
+    ----------
+    acquire image from swapchain
+    execute command buffer with that image as attachment in the framebuffer
+    return image to the swapchain for presentation
+
+    the function is called and returned before the operations it starts finish
+    the order of this execution is undefined
+    but each of these operations depends on the last
+    THEREFORE WE NEED EITHER SEMAPHORES OR FENCES
+
+    To synchronize swapchain events you need to use either FENCES or SEMAPHORES
+    These are objects that signal whether an operation is complete and the other
+    object checks to see if the first is complete
+    A FENCE's state can be accessed from your program using calls like
+    vkWaitForFences, semaphores cannot be accessed in this manner.
+    FENCES are mainly for synchronizing your application with rendering
+    operations, a SEMAPHORE is for synchronizing operations within or across
+    command queues
+
+    We need one semaphore to signal that an image has been acquired and is ready
+    for rendering, the other will signal that rendering has finished
+
+    NOTE:
+    YOU NEED TO GO OVER SEMAPHORES/FENCES AND THEIR USE IN QUEUE/COMMAND
+    SUBMISSION FOR GRAPHICS
+
+    Subpass Dependencies
+    Subpasses in a render pass take care of image layout transitions
+    These submissions are taken care of by SUBPASS DEPENDENCIES
+    Even though we only have one subpass for this simple program, we still have
+    to consider the actions immediately before and after this subpass, these are
+    indeed subpass dependencies
+    To ensure this is met we can make sure the render pass waits for the
+    VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT stage
+    We have to create and fill a VkSubpassDependency struct
+    and point render_pass_ci.pDependencies to it
+
+    Presentation
+    LAST STEP IN DRAWING A FRAME
+    submit the result back to the swapchain to have it eventually show up on the
+    screen
