@@ -401,3 +401,48 @@
     LAST STEP IN DRAWING A FRAME
     submit the result back to the swapchain to have it eventually show up on the
     screen
+
+    VERTEX BUFFERS
+    --------------
+
+    We have to tell Vulkan how to pass data to the vertex shader once it's been
+    uploaded into the GPU memory
+    Do this through VkVertexInputBindingDescription struct
+    it describes the behavior and rate of moving data from GPU memory to shader
+    We also need VkVertexInputAttributeDescription
+    We have interleaved two attributes into our Vertex structure. They are,
+    of course, position and color, and therefore we need 2 of these structures
+
+    Buffers in Vulkan are regions of memory used to store arbitrary data that
+    can be read by the GPU
+    The programmer is responsible for memory management of these buffers in
+    Vulkan
+
+    First step of allocating memory to buffer is query its memory requirements
+    using vkGetBufferMemoryRequirements
+    There are different types of memory allowed by the GPU to allocate from
+    Each type can have different allowed operations and performance characteristics
+
+    Associate memory allocated with vkAllocateMemory with a buffer using
+    vkBindBufferMemory
+
+    Copy vertex data to the buffer, then memcpy vertex data to mapped memory
+
+    Staging Buffer
+    --------------
+    The best memory type for the GPU to read from the CPU is
+    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT
+    but this is usually not accessible by the CPU on dedicated graphics cards
+    SOLUTION: Create TWO vertex buffers
+    ONE: STAGING BUFFER stages/uploads vertex dat from vertex array into CPU
+    accessible memory
+    TWO: FINAL VERTEX BUFFER to be used by the GPU
+    We transfer data between the two via a buffer copy command
+
+    Memory transfer operations are executed using command buffers just like
+    drawing commands
+
+    Index Buffer
+    ------------
+    We use one to use less memory and to make shape making easier
+    We set everything up similar to the staging/vertex buffers
