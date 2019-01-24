@@ -157,6 +157,7 @@ private:
   std::vector<VkSemaphore> render_finished_semaphores;
   std::vector<VkFence> in_flight_fences;
   size_t current_frame = 0;
+  bool framebuffer_resized = false;
 
 
   std::vector<const char*> get_required_extensions() {
@@ -314,8 +315,17 @@ private:
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
     glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
     window = glfwCreateWindow(WIDTH, HEIGHT, "Vulkan", nullptr, nullptr);
+    glfwSetWindowUserPointer(window, this);
+    glfwSetFramebufferSizeCallback(window, framebuffer_resize_callback);
 
     glfwSetKeyCallback(window, key_callback);
+  }
+
+
+  static void framebuffer_resize_callback(GLFWwindow* window, int width, int height)
+  {
+    auto app = reinterpret_cast<TriangleApp*>(glfwGetWindowUserPointer(window));
+    app->framebuffer_resized = true;
   }
 
 
@@ -334,6 +344,42 @@ private:
     create_command_pool();
     create_command_buffers();
     create_sync_objects();
+  }
+
+
+  void cleanup_swapchain()
+  {
+    for (auto framebuffer : swapchain_framebuffers) {
+      vkDestroyFramebuffer(device, framebuffer, nullptr);
+    }
+    vkDestroyPipeline(device, graphics_pipeline, nullptr);
+    vkDestroyPipelineLayout(device, pipeline_layout, nullptr);
+    vkDestroyRenderPass(device, render_pass, nullptr);
+    for (auto image_view : swapchain_image_views) {
+      vkDestroyImageView(device, image_view, nullptr);
+    }
+    vkDestroySwapchainKHR(device, swapchain, nullptr);
+  }
+
+
+  void recreate_swapchain()
+  {
+    int width = 0, height = 0;
+    while (width == 0 || height == 0) {
+      glfwGetFramebufferSize(window, &width, &height);
+      glfwWaitEvents();
+    }
+    
+    vkDeviceWaitIdle(device);
+
+    cleanup_swapchain();
+
+    create_swapchain();
+    create_image_views();
+    create_render_pass();
+    create_graphics_pipeline();
+    create_framebuffers();
+    create_command_buffers();
   }
 
 
@@ -360,15 +406,33 @@ private:
   }
 
 
+  /*
+   *  We check whether or not the current swapchain is out of date or inoptimal
+   *  if so then we recreate the swapchain
+   *  This may occure because of a window resizing, for instance
+   *  Some drivers actually trigger a VK_ERROR_OUT_OF_DATE_KHR automatically
+   *  (upon window resizing or some such), but because this functionality is not
+   *  guaranteed we must do this ourselves
+   *
+   *  To detect whether a resize occured we use the GLFW function
+   *  glfwSetFramebufferSizeCallback to set up a callback function
+   */
   void draw_frame()
   {
     vkWaitForFences(device, 1, &in_flight_fences[current_frame], VK_TRUE, std::numeric_limits<uint64_t>::max());
-    vkResetFences(device, 1, &in_flight_fences[current_frame]);
 
     uint32_t image_index;
-    vkAcquireNextImageKHR(device, swapchain,
+    VkResult result = vkAcquireNextImageKHR(device, swapchain,
       std::numeric_limits<uint64_t>::max(), image_available_semaphores[current_frame],
       VK_NULL_HANDLE, &image_index);
+
+    /* check if the swapchain is out of date and needs to be replaced */
+    if (result == VK_ERROR_OUT_OF_DATE_KHR) {
+      recreate_swapchain();
+      return;
+    } else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
+        throw std::runtime_error("Failed to acquire swap chain image!");
+    }
 
     VkSubmitInfo submit_info = {};
     submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -384,6 +448,8 @@ private:
     VkSemaphore signal_semaphores[] = {render_finished_semaphores[current_frame]};
     submit_info.signalSemaphoreCount = 1;
     submit_info.pSignalSemaphores = signal_semaphores;
+
+    vkResetFences(device, 1, &in_flight_fences[current_frame]);
 
     if (vkQueueSubmit(graphics_queue, 1, &submit_info, in_flight_fences[current_frame]) != VK_SUCCESS)
       throw std::runtime_error("Failed to submit draw command buffer!");
@@ -401,7 +467,14 @@ private:
 
     vkQueuePresentKHR(present_queue, &present_info);
 
-    vkQueueWaitIdle(present_queue);
+    result = vkQueueWaitIdle(present_queue);
+
+    if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || framebuffer_resized) {
+      framebuffer_resized = false;
+      recreate_swapchain();
+    } else if (result != VK_SUCCESS) {
+        throw std::runtime_error("failed to present swap chain image!");
+    }
 
     current_frame = (current_frame + 1) % MAX_FRAMES_IN_FLIGHT;
   }
@@ -790,7 +863,13 @@ private:
     if (capabilities.currentExtent.width != std::numeric_limits<uint32_t>::max()) {
       return capabilities.currentExtent;
     } else {
-      VkExtent2D actual_extent = {WIDTH, HEIGHT};
+      int width, height;
+      glfwGetFramebufferSize(window, &width, &height);
+
+      VkExtent2D actual_extent = {
+        static_cast<uint32_t>(width),
+        static_cast<uint32_t>(height)
+      };
 
       actual_extent.width  = std::max(capabilities.minImageExtent.width, std::min(capabilities.maxImageExtent.width, actual_extent.width));
       actual_extent.height = std::max(capabilities.minImageExtent.height, std::min(capabilities.maxImageExtent.height, actual_extent.height));
@@ -939,22 +1018,13 @@ private:
 
   void cleanup()
   {
+    cleanup_swapchain();
     for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
       vkDestroySemaphore(device, render_finished_semaphores[i], nullptr);
       vkDestroySemaphore(device, image_available_semaphores[i], nullptr);
       vkDestroyFence(device, in_flight_fences[i], nullptr);
     }
     vkDestroyCommandPool(device, command_pool, nullptr);
-    for (auto framebuffer : swapchain_framebuffers) {
-      vkDestroyFramebuffer(device, framebuffer, nullptr);
-    }
-    vkDestroyPipeline(device, graphics_pipeline, nullptr);
-    vkDestroyPipelineLayout(device, pipeline_layout, nullptr);
-    vkDestroyRenderPass(device, render_pass, nullptr);
-    for (auto image_view : swapchain_image_views) {
-      vkDestroyImageView(device, image_view, nullptr);
-    }
-    vkDestroySwapchainKHR(device, swapchain, nullptr);
     vkDestroyDevice(device, nullptr);
     if (enable_validation_layers)
       destroy_debug_utils_messenger_EXT(instance, debug_messenger, nullptr);
@@ -990,6 +1060,7 @@ private:
 
     return true;
   }
+
 
   static VKAPI_ATTR VkBool32 VKAPI_CALL debug_callback(
     VkDebugUtilsMessageSeverityFlagBitsEXT message_severity,
