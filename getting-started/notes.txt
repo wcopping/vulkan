@@ -446,3 +446,21 @@
     ------------
     We use one to use less memory and to make shape making easier
     We set everything up similar to the staging/vertex buffers
+
+    UNIFORM BUFFERS
+    ---------------
+
+    RESOURCE DESCRIPTORS used for shaders to freely access resources like
+    buffers and images
+    We will set up a buffer to contain the transformation matrices then have
+    the vertex shader access it through a resource descriptor
+      specify descriptor during pipeline construction
+      allocate descriptor set from descriptor pool
+      bind descriptor set during rendering
+
+    Because we copy data to the uniform buffer on every frame, it makes no sense
+    to create/use a staging buffer for the uniform buffer.
+
+    We need to update it alongside each frame and therefore we need multiple
+    buffers because multiple frames might be IN FLIGHT at one moment in time
+    We will have one uniform buffer per swapchain image
