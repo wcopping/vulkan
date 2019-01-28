@@ -1,2 +1,2 @@
-# vulkan-compute
+# vulkan
 create compute functionality for vulkan
