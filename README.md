@@ -1,2 +1,2 @@
 # vulkan
-create compute functionality for vulkan
+play with Vulkan
